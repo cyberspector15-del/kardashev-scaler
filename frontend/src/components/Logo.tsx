@@ -1,12 +1,20 @@
+import { useId } from 'react'
+
 type LogoProps = {
   /** Width in CSS pixels; the logo keeps its reference aspect ratio. */
   size?: number | string
   className?: string
   title?: string
+  /** Percentage of the first bar that is illuminated (0–100). */
+  fillPercent?: number
 }
 
 /** The Kardashev Scaler mark: three rising energy bars on a luminous baseline. */
-export function Logo({ size = 240, className, title = 'Kardashev Scaler' }: LogoProps) {
+export function Logo({ size = 240, className, title = 'Kardashev Scaler', fillPercent = 73 }: LogoProps) {
+  const glowId = useId().replace(/:/g, '')
+  const safeFillPercent = Math.max(0, Math.min(100, fillPercent))
+  const fillHeight = 80 * (safeFillPercent / 100)
+  const fillY = 208 - fillHeight
   return (
     <svg
       aria-label={title}
@@ -20,7 +28,7 @@ export function Logo({ size = 240, className, title = 'Kardashev Scaler' }: Logo
     >
       <title>{title}</title>
       <defs>
-        <filter id="white-glow" x="-30%" y="-20%" width="160%" height="150%">
+        <filter id={glowId} x="-30%" y="-20%" width="160%" height="150%">
           <feGaussianBlur result="blur" stdDeviation="2.5" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -29,14 +37,16 @@ export function Logo({ size = 240, className, title = 'Kardashev Scaler' }: Logo
         </filter>
       </defs>
 
-      <g filter="url(#white-glow)" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3">
+      <g filter={`url(#${glowId})`} stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3">
         <path d="M15 208H205" />
         <rect height="80" rx="22" width="44" x="28" y="128" />
         <rect height="104" rx="22" width="44" x="88" y="104" />
         <rect height="160" rx="22" width="44" x="148" y="48" />
       </g>
 
-      <path d="M29.5 150C29.5 137.85 39.35 128 51.5 128C63.65 128 73.5 137.85 73.5 150V186C73.5 198.15 63.65 208 51.5 208C39.35 208 29.5 198.15 29.5 186V150Z" fill="#ffffff" />
+      {fillHeight > 0 && (
+        <rect fill="#ffffff" height={fillHeight} rx={Math.min(22, fillHeight / 2)} width="44" x="29.5" y={fillY} />
+      )}
     </svg>
   )
 }
