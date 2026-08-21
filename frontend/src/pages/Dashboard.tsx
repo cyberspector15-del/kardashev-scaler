@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { Logo } from '../components/Logo'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
@@ -22,9 +22,12 @@ type KardashevProgress = {
   projected_k_shift: number
   projection: { label: string; projected_kardashev_value: number }
 }
+type UsageResult = { captured_kwh: number; consumed_kwh: number; waste_kwh: number; deficit_kwh: number; waste_pct: number; flagged_windows: { window: string; waste_kwh: number }[] }
+type AbsorptionResult = { zones: { lat: number; lng: number; avg_irradiance: number; panel_density_assumed: number; potential_score: number }[]; top_recommendation: { lat: number; lng: number; potential_score: number } | null }
+type DistributionResult = { allocations: { residential_kwh: number; industrial_kwh: number; agricultural_kwh: number }; shortfalls: { sector: string; shortfall_kwh: number }[] }
+type RecommendationResult = { recommendations: { priority: 'high' | 'medium' | 'low'; action: string; reason: string }[] }
 
 const navItems = ['Overview', 'Tracker Control', 'Kardashev Progress', 'Usage Intelligence', 'Absorption Optimization', 'Distribution Logic', 'Recommendation Engine']
-const futureViews = new Set(navItems.slice(3))
 
 function isoDate(offsetDays = 0) {
   const day = new Date()
@@ -58,6 +61,13 @@ export function Dashboard() {
   const [isComparing, setIsComparing] = useState(false)
   const [isLoadingProgress, setIsLoadingProgress] = useState(false)
   const [isLoadingSun, setIsLoadingSun] = useState(false)
+  const [consumed, setConsumed] = useState('4')
+  const [usage, setUsage] = useState<UsageResult | null>(null)
+  const [absorption, setAbsorption] = useState<AbsorptionResult | null>(null)
+  const [distribution, setDistribution] = useState<DistributionResult | null>(null)
+  const [recommendations, setRecommendations] = useState<RecommendationResult | null>(null)
+  const [moduleError, setModuleError] = useState('')
+  const [isModuleLoading, setIsModuleLoading] = useState(false)
 
   const getSunPosition = async () => {
     setIsLoadingSun(true); setSunError('')
@@ -98,6 +108,17 @@ export function Dashboard() {
     finally { setIsLoadingProgress(false) }
   }
 
+  const runModule = async <T,>(path: string, payload: object, setResult: (result: T) => void) => {
+    setIsModuleLoading(true); setModuleError('')
+    try { setResult(await request<T>(path, payload)) }
+    catch (error) { setModuleError(error instanceof Error ? error.message : 'This module is unavailable.') }
+    finally { setIsModuleLoading(false) }
+  }
+  const runUsage = () => void runModule<UsageResult>('/api/usage/analyze', { captured_kwh: comparison?.tracked_output_kwh ?? 0, consumed_kwh: Number(consumed) }, setUsage)
+  const runAbsorption = () => void runModule<AbsorptionResult>('/api/absorption/zones', { center_lat: Number(latitude), center_lng: Number(longitude), radius_km: 10, grid_size: 3 }, setAbsorption)
+  const runDistribution = () => void runModule<DistributionResult>('/api/distribution/model', { total_captured_kwh: comparison?.tracked_output_kwh ?? 0, demand_breakdown: { residential_pct: 40, industrial_pct: 40, agricultural_pct: 20 } }, setDistribution)
+  const runRecommendations = () => void runModule<RecommendationResult>('/api/recommendations/generate', { usage, absorption, distribution }, setRecommendations)
+
   const maxOutput = comparison ? Math.max(comparison.fixed_output_kwh, comparison.tracked_output_kwh, 0.0001) : 1
   const earthFill = progress ? progress.earth_kardashev_value * 100 : 73
 
@@ -121,9 +142,16 @@ export function Dashboard() {
             <label>Lng<input value={longitude} inputMode="decimal" onChange={(event) => setLongitude(event.target.value)} /></label>
           </div>
         </header>
-        {futureViews.has(view) ? (
-          <section className="coming-soon"><span>Phase 4</span><h2>{view}</h2><p>Coming in Phase 4</p></section>
-        ) : (
+        {view === 'Usage Intelligence' ? <ModulePanel title="Usage Intelligence" eyebrow="Captured versus consumed" loading={isModuleLoading} error={moduleError} action="Analyze usage" onAction={runUsage}>
+          <label>Consumed kWh<input type="number" min="0" step=".1" value={consumed} onChange={(event) => setConsumed(event.target.value)} /></label>
+          {usage && <><div className="module-stat-grid"><Stat label="Captured" value={`${usage.captured_kwh.toFixed(2)} kWh`} /><Stat label="Consumed" value={`${usage.consumed_kwh.toFixed(2)} kWh`} /><Stat label="Waste" value={`${usage.waste_kwh.toFixed(2)} kWh`} /><Stat label="Deficit" value={`${usage.deficit_kwh.toFixed(2)} kWh`} /></div><p className="estimate-label">Waste: {usage.waste_pct.toFixed(2)}%</p><WindowList windows={usage.flagged_windows} /></>}</ModulePanel>
+        : view === 'Absorption Optimization' ? <ModulePanel title="Absorption Optimization" eyebrow="NASA POWER potential grid" loading={isModuleLoading} error={moduleError} action="Rank zones" onAction={runAbsorption}>
+          {absorption && <ZoneTable zones={absorption.zones} />}</ModulePanel>
+        : view === 'Distribution Logic' ? <ModulePanel title="Distribution Logic" eyebrow="40% residential · 40% industrial · 20% agricultural" loading={isModuleLoading} error={moduleError} action="Model allocation" onAction={runDistribution}>
+          {distribution && <><div className="allocation-list">{Object.entries(distribution.allocations).map(([sector, value]) => <OutputBar key={sector} label={sector.replace('_kwh', '')} value={value} width={Math.min(100, value)} glow />)}</div><Shortfalls items={distribution.shortfalls} /></>}</ModulePanel>
+        : view === 'Recommendation Engine' ? <ModulePanel title="Recommendation Engine" eyebrow="Explainable rule set" loading={isModuleLoading} error={moduleError} action="Generate recommendations" onAction={runRecommendations}>
+          {recommendations && <RecommendationList items={recommendations.recommendations} />}</ModulePanel>
+        : (
           <div className="dashboard-grid">
             <section className="panel comparison-panel">
               <div className="panel-heading"><span className="eyebrow">Tracker Control</span><h2>Panel comparison</h2></div>
@@ -177,3 +205,11 @@ function Stat({ label, value }: { label: string; value: string }) { return <div>
 function Failure({ message, retry }: { message: string; retry?: () => void }) {
   return <div className="failure"><p>{message}</p>{retry && <button className="text-button" onClick={() => void retry()}>Retry</button>}</div>
 }
+
+function ModulePanel({ title, eyebrow, loading, error, action, onAction, children }: { title: string; eyebrow: string; loading: boolean; error: string; action: string; onAction: () => void; children: ReactNode }) {
+  return <section className="module-page"><span className="eyebrow">{eyebrow}</span><h2>{title}</h2><div className="module-action"><button className="outline-button" disabled={loading} onClick={onAction}>{loading ? 'Processing' : action}</button></div>{loading && <div className="skeleton module-skeleton" />}{error && <Failure message={error} retry={onAction} />}{children}</section>
+}
+function WindowList({ windows }: { windows: UsageResult['flagged_windows'] }) { return <div className="data-list"><span className="eyebrow">Highest waste windows</span>{windows.length ? windows.map((item) => <p key={item.window}><b>{item.window}</b><span>{item.waste_kwh.toFixed(3)} kWh</span></p>) : <p>No surplus windows flagged.</p>}</div> }
+function ZoneTable({ zones }: { zones: AbsorptionResult['zones'] }) { return <div className="data-list zone-list">{zones.map((zone) => <p key={`${zone.lat}-${zone.lng}`}><b>{zone.lat}, {zone.lng}</b><span>Score {zone.potential_score.toFixed(2)} · GHI {zone.avg_irradiance.toFixed(2)}</span></p>)}</div> }
+function Shortfalls({ items }: { items: DistributionResult['shortfalls'] }) { return <div className="data-list"><span className="eyebrow">Shortfalls</span>{items.length ? items.map((item) => <p key={item.sector}><b>{item.sector}</b><span>{item.shortfall_kwh.toFixed(2)} kWh</span></p>) : <p>No baseline shortfalls.</p>}</div> }
+function RecommendationList({ items }: { items: RecommendationResult['recommendations'] }) { return <div className="recommendations">{items.map((item, index) => <article className={`recommendation ${item.priority}`} key={`${item.action}-${index}`}><span>{item.priority}</span><h3>{item.action}</h3><p>{item.reason}</p></article>)}</div> }

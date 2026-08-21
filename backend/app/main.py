@@ -4,6 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.tracker import router as tracker_router
+from app.routers.usage import router as usage_router
+from app.routers.absorption import router as absorption_router
+from app.routers.distribution import router as distribution_router
+from app.routers.recommendations import router as recommendations_router
 
 app = FastAPI(title="Kardashev Scaler API")
 
@@ -16,6 +20,10 @@ app.add_middleware(
 )
 
 app.include_router(tracker_router)
+app.include_router(usage_router)
+app.include_router(absorption_router)
+app.include_router(distribution_router)
+app.include_router(recommendations_router)
 
 
 @app.get("/health")
