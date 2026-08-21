@@ -57,11 +57,13 @@ NASA supplies daily irradiation. The service allocates each daily total across d
 ### `POST /api/tracker/kardashev-score`
 
 ```json
-{"energy_output_kwh": 7.1032}
+{"session_id":"tracker-session-uuid"}
 ```
 
 ```json
-{"kardashev_value":-0.214853,"progress_id":null}
+{"earth_kardashev_value":0.7305,"session_efficiency_gain_pct":23.7,"projected_k_shift":0.0002,"projection":{"label":"Estimate: applies this session's tracking gain to all current global solar PV; not a measured Kardashev change.","projected_kardashev_value":0.7307,"global_solar_capacity_tw":2.2,"global_solar_capacity_factor_assumption":0.2},"progress_id":"uuid"}
 ```
 
-Alternatively submit `{"session_id":"uuid"}` after Supabase is configured. The formula is Sagan's `K = (log10(P watts) - 6) / 10`. A session is an energy measurement, so this implementation treats its kWh value as energy generated over one stated reference hour and converts it to watts (`kWh × 1000`). This is a demonstrative scale mapping, not a civilization-wide measurement.
+This endpoint deliberately does **not** assign a Kardashev score to an individual panel or tracker session. Sagan's formula, `K = (log10(P watts) - 6) / 10`, is a civilization-wide power scale; applying it to a panel produces a negative value with no scientific interpretation.
+
+Instead, `earth_kardashev_value` is calculated from 2024 global primary energy use of 176,737 TWh/year (about 20.2 TW average), from [Our World in Data's global energy dataset](https://ourworldindata.org/energy-production-consumption), which cites the Energy Institute Statistical Review. The session's measured gain is used only for the explicitly labelled `projection`: it applies that percentage to the IEA's reported 2.2 TW global installed solar PV capacity at end-2024 ([IEA Global Energy Review 2025](https://www.iea.org/reports/global-energy-review-2025/electricity)), using a stated 20% global capacity-factor assumption. It is an estimate of potential additional output, not a measured change in civilization-scale energy use.

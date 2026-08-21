@@ -4,13 +4,13 @@ from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.services.solar_calc import (
     NasaPowerError,
     calculate_comparison,
+    earth_kardashev_projection,
     fetch_nasa_irradiance,
-    kardashev_score,
     solar_position,
 )
 from app.services.supabase_client import get_supabase, insert_row
@@ -43,14 +43,7 @@ class CompareRequest(IrradianceRequest):
 
 
 class KardashevRequest(BaseModel):
-    session_id: str | None = None
-    energy_output_kwh: float | None = Field(default=None, gt=0)
-
-    @model_validator(mode="after")
-    def session_or_energy_is_required(self) -> "KardashevRequest":
-        if not self.session_id and self.energy_output_kwh is None:
-            raise ValueError("Provide session_id or energy_output_kwh.")
-        return self
+    session_id: str
 
 
 def _bad_request(error: Exception) -> HTTPException:
@@ -113,24 +106,33 @@ async def compare_tracker_output(body: CompareRequest) -> dict[str, object]:
 
 
 @router.post("/kardashev-score")
-async def get_kardashev_score(body: KardashevRequest) -> dict[str, float | str | None]:
-    energy = body.energy_output_kwh
-    if body.session_id:
-        client = get_supabase()
-        if client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="session_id scoring requires configured Supabase credentials; provide energy_output_kwh for demo mode.",
-            )
-        try:
-            session = client.table("tracker_sessions").select("total_energy_tracked_kwh").eq("id", body.session_id).single().execute()
-            energy = float(session.data["total_energy_tracked_kwh"])
-        except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker session was not found.") from exc
+async def get_kardashev_score(body: KardashevRequest) -> dict[str, float | str | dict[str, float]]:
+    client = get_supabase()
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Kardashev projection requires a stored tracker session and configured Supabase credentials.",
+        )
     try:
-        value = kardashev_score(float(energy))
-    except (TypeError, ValueError) as exc:
+        session = client.table("tracker_sessions").select("efficiency_gain_pct").eq("id", body.session_id).single().execute()
+        efficiency_gain_pct = float(session.data["efficiency_gain_pct"])
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracker session was not found.") from exc
+    try:
+        result = earth_kardashev_projection(efficiency_gain_pct)
+    except ValueError as exc:
         raise _bad_request(exc) from exc
 
-    progress = insert_row("kardashev_progress", {"session_id": body.session_id, "scale_value": value})
-    return {"kardashev_value": value, "progress_id": progress["id"] if progress else None}
+    progress = insert_row("kardashev_progress", {"session_id": body.session_id, "scale_value": result["earth_kardashev_value"]})
+    return {
+        "earth_kardashev_value": result["earth_kardashev_value"],
+        "session_efficiency_gain_pct": efficiency_gain_pct,
+        "projected_k_shift": result["projected_k_shift"],
+        "projection": {
+            "label": "Estimate: applies this session's tracking gain to all current global solar PV; not a measured Kardashev change.",
+            "projected_kardashev_value": result["projected_kardashev_value"],
+            "global_solar_capacity_tw": result["global_solar_capacity_tw"],
+            "global_solar_capacity_factor_assumption": result["global_solar_capacity_factor_assumption"],
+        },
+        "progress_id": progress["id"] if progress else None,
+    }

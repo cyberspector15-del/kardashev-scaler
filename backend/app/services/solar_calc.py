@@ -15,6 +15,18 @@ NASA_DAILY_PATH = "/temporal/daily/point"
 MAX_DATE_RANGE_DAYS = 366
 NASA_EARLIEST_DATE = date(1981, 1, 1)
 
+# Our World in Data reports global primary energy use of 176,737 TWh in 2024,
+# sourced from the Energy Institute Statistical Review of World Energy (2025):
+# https://ourworldindata.org/energy-production-consumption
+GLOBAL_PRIMARY_ENERGY_TWH_PER_YEAR = 176_737.0
+# IEA's Global Energy Review 2025 reports 2.2 TW of installed solar PV in 2024:
+# https://www.iea.org/reports/global-energy-review-2025/electricity
+GLOBAL_SOLAR_PV_CAPACITY_TW = 2.2
+# A transparent global-average assumption for converting nameplate capacity to
+# annual output; it is an estimate, not an IEA-measured capacity factor.
+GLOBAL_SOLAR_CAPACITY_FACTOR = 0.20
+HOURS_PER_YEAR = 365.25 * 24
+
 
 class NasaPowerError(RuntimeError):
     """A safe, user-facing failure while contacting or parsing NASA POWER."""
@@ -168,15 +180,33 @@ def calculate_comparison(
     }
 
 
-def kardashev_score(energy_output_kwh: float) -> float:
-    """Convert energy to the simplified Sagan Kardashev scale.
+def kardashev_value_from_power(power_watts: float) -> float:
+    """Compute Sagan's K = (log10(P in watts) - 6) / 10."""
+    if power_watts <= 0:
+        raise ValueError("power_watts must be greater than zero.")
+    return (log10(power_watts) - 6) / 10
 
-    Sagan's original expression is K = (log10(P watts) - 6) / 10. A finite
-    demo session has energy rather than power, so it uses average power across
-    one hour (kWh × 1,000 W/kWh) as the stated reference interval. The value is
-    not clamped: the UI may choose how to display negative micro-scale values.
+
+def earth_kardashev_projection(session_efficiency_gain_pct: float) -> dict[str, float]:
+    """Return Earth's measured-scale K and a labelled tracking extrapolation.
+
+    A panel or a finite tracker session cannot be assigned a Kardashev value:
+    the scale is defined for civilization-wide power. The session's gain is used
+    only to estimate an incremental output across existing global solar PV.
     """
-    if energy_output_kwh <= 0:
-        raise ValueError("energy_output_kwh must be greater than zero.")
-    power_watts = energy_output_kwh * 1_000
-    return round((log10(power_watts) - 6) / 10, 6)
+    if session_efficiency_gain_pct < -100:
+        raise ValueError("session_efficiency_gain_pct cannot be less than -100.")
+    earth_average_power_watts = GLOBAL_PRIMARY_ENERGY_TWH_PER_YEAR * 1_000_000_000_000 / HOURS_PER_YEAR
+    earth_k = kardashev_value_from_power(earth_average_power_watts)
+    global_solar_average_power_watts = (
+        GLOBAL_SOLAR_PV_CAPACITY_TW * 1_000_000_000_000 * GLOBAL_SOLAR_CAPACITY_FACTOR
+    )
+    projected_extra_power_watts = global_solar_average_power_watts * (session_efficiency_gain_pct / 100)
+    projected_k = kardashev_value_from_power(earth_average_power_watts + projected_extra_power_watts)
+    return {
+        "earth_kardashev_value": round(earth_k, 6),
+        "projected_kardashev_value": round(projected_k, 6),
+        "projected_k_shift": round(projected_k - earth_k, 6),
+        "global_solar_capacity_tw": GLOBAL_SOLAR_PV_CAPACITY_TW,
+        "global_solar_capacity_factor_assumption": GLOBAL_SOLAR_CAPACITY_FACTOR,
+    }
