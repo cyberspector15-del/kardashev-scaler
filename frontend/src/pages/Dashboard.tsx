@@ -1,217 +1,39 @@
 import { FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { Logo } from '../components/Logo'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+const api = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+type Comparison = { fixed_output_kwh:number; tracked_output_kwh:number; efficiency_gain_pct:number; session_id:string|null; data_source?:string }
+type Sun = { solar_azimuth:number; solar_elevation:number; optimal_panel_tilt_angle:number }
+type Progress = { earth_kardashev_value:number; session_efficiency_gain_pct:number; projected_k_shift:number; projection:{label:string} }
+type Usage = {captured_kwh:number;consumed_kwh:number;waste_kwh:number;deficit_kwh:number;flagged_windows:{window:string;waste_kwh:number}[]}
+type Absorption={zones:{lat:number;lng:number;avg_irradiance:number;potential_score:number}[]}; type Distribution={allocations:Record<string,number>;shortfalls:{sector:string;shortfall_kwh:number}[]}; type Recommendations={recommendations:{priority:'high'|'medium'|'low';action:string;reason:string}[]}
+const nav=['Overview','Tracker Control','Kardashev Progress','Sun Position','Usage Intelligence','Absorption Optimization','Distribution Logic','Recommendation Engine']
+const today=(offset:number)=>{const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
+async function post<T>(path:string,body:object){const response=await fetch(`${api}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail??'The request could not be completed.');return data as T}
 
-type Comparison = {
-  fixed_output_kwh: number
-  tracked_output_kwh: number
-  efficiency_gain_pct: number
-  session_id: string | null
-  data_source?: string
+export function Dashboard(){
+ const [view,setView]=useState('Overview'),[lat,setLat]=useState('28.6139'),[lng,setLng]=useState('77.2090'),[start,setStart]=useState(today(-7)),[end,setEnd]=useState(today(-1)),[area,setArea]=useState('2'),[eff,setEff]=useState('22')
+ const [comparison,setComparison]=useState<Comparison|null>(null),[progress,setProgress]=useState<Progress|null>(null),[sun,setSun]=useState<Sun|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+ const [consumed,setConsumed]=useState('4'),[usage,setUsage]=useState<Usage|null>(null),[absorption,setAbsorption]=useState<Absorption|null>(null),[distribution,setDistribution]=useState<Distribution|null>(null),[recommendations,setRecommendations]=useState<Recommendations|null>(null)
+ const sunRequest=async()=>{try{setSun(await post<Sun>('/api/tracker/sun-position',{latitude:+lat,longitude:+lng,timestamp:new Date().toISOString()}));setError('')}catch(e){setError(e instanceof Error?e.message:'Sun position unavailable.')}}
+ useEffect(()=>{void sunRequest();const timer=window.setInterval(()=>void sunRequest(),60000);return()=>window.clearInterval(timer)// eslint-disable-next-line react-hooks/exhaustive-deps
+ },[lat,lng])
+ const comparisonRequest=async(event?:FormEvent)=>{event?.preventDefault();setBusy(true);setError('');setProgress(null);try{const result=await post<Comparison>('/api/tracker/compare',{latitude:+lat,longitude:+lng,start_date:start,end_date:end,panel_specs:{area_m2:+area,efficiency_pct:+eff}});setComparison(result);if(result.session_id)setProgress(await post<Progress>('/api/tracker/kardashev-score',{session_id:result.session_id}));else setError('Comparison complete. Configure Supabase to persist a session and unlock the global projection.')}catch(e){setError(e instanceof Error?e.message:'Comparison unavailable.')}finally{setBusy(false)}}
+ const module=async<T,>(path:string,payload:object,setter:(x:T)=>void)=>{setBusy(true);setError('');try{setter(await post<T>(path,payload))}catch(e){setError(e instanceof Error?e.message:'Module unavailable.')}finally{setBusy(false)}}
+ const max=comparison?Math.max(comparison.fixed_output_kwh,comparison.tracked_output_kwh,.0001):1
+ let content:ReactNode
+ if(view==='Overview')content=<Overview/>
+ else if(view==='Tracker Control')content=<section className="standalone-page" id="tracker-control"><span className="eyebrow">Tracker Control</span><h2>Panel comparison</h2><form className="comparison-form" onSubmit={comparisonRequest}><Field label="Start" type="date" value={start} set={setStart}/><Field label="End" type="date" value={end} set={setEnd}/><Field label="Area m²" type="number" value={area} set={setArea}/><Field label="Efficiency %" type="number" value={eff} set={setEff}/><button className="outline-button" disabled={busy}>{busy?'Calculating':'Run comparison'}</button></form>{busy&&<div className="skeleton comparison-skeleton"/>}{error&&<Failure message={error} retry={()=>void comparisonRequest()}/>} {comparison&&<><p className="cached-label">{comparison.data_source==='cached_demo_sample'?'Showing cached sample data — NASA POWER was unavailable.':'Live NASA POWER comparison data.'}</p><div className="gain-stat"><span>Efficiency gain</span><strong>+{comparison.efficiency_gain_pct.toFixed(2)}%</strong></div><div className="bar-comparison"><Bar label="Fixed tilt" value={comparison.fixed_output_kwh} width={comparison.fixed_output_kwh/max*100}/><Bar label="Sun tracking" value={comparison.tracked_output_kwh} width={comparison.tracked_output_kwh/max*100} glow/></div></>}</section>
+ else if(view==='Kardashev Progress')content=<section className="standalone-page" id="kardashev-progress"><span className="eyebrow">Kardashev Progress</span><h2>Earth-scale measure</h2><div className="progress-content"><Logo fillPercent={(progress?.earth_kardashev_value??.73)*100} size={220}/><div><span className="eyebrow">Earth Kardashev value</span><strong className="k-value">{progress?.earth_kardashev_value.toFixed(6)??'0.730000'}</strong></div></div>{progress?<><div className="support-stats"><span>Session gain <b>+{progress.session_efficiency_gain_pct.toFixed(2)}%</b></span><span>Projected K shift <b>+{progress.projected_k_shift.toFixed(6)}</b></span></div><p className="estimate-label">{progress.projection.label}</p></>:<p className="estimate-label">Run Tracker Control first to create a comparison session.</p>}{error&&<Failure message={error}/>}</section>
+ else if(view==='Sun Position')content=<section className="standalone-page"><span className="eyebrow">Live tracker · 60s refresh</span><h2>Sun position</h2>{sun&&<div className="sun-stats"><Stat label="Azimuth" value={`${sun.solar_azimuth.toFixed(1)}°`}/><Stat label="Elevation" value={`${sun.solar_elevation.toFixed(1)}°`}/><Stat label="Optimal tilt" value={`${sun.optimal_panel_tilt_angle.toFixed(1)}°`}/></div>}{error&&<Failure message={error} retry={()=>void sunRequest()}/>}</section>
+ else if(view==='Usage Intelligence')content=<Module title={view} eyebrow="Captured versus consumed" busy={busy} error={error} action="Analyze usage" onAction={()=>void module('/api/usage/analyze',{captured_kwh:comparison?.tracked_output_kwh??0,consumed_kwh:+consumed},setUsage)}><Field label="Consumed kWh" type="number" value={consumed} set={setConsumed}/>{usage&&<><div className="module-stat-grid"><Stat label="Captured" value={`${usage.captured_kwh.toFixed(2)} kWh`}/><Stat label="Consumed" value={`${usage.consumed_kwh.toFixed(2)} kWh`}/><Stat label="Waste" value={`${usage.waste_kwh.toFixed(2)} kWh`}/><Stat label="Deficit" value={`${usage.deficit_kwh.toFixed(2)} kWh`}/></div><List title="Highest waste windows" items={usage.flagged_windows.map(x=>[x.window,`${x.waste_kwh.toFixed(3)} kWh`])}/></>}</Module>
+ else if(view==='Absorption Optimization')content=<Module title={view} eyebrow="NASA POWER potential grid" busy={busy} error={error} action="Rank zones" onAction={()=>void module('/api/absorption/zones',{center_lat:+lat,center_lng:+lng,radius_km:10,grid_size:3},setAbsorption)}>{absorption&&<List title="Ranked zones" items={absorption.zones.map(x=>[`${x.lat}, ${x.lng}`,`Score ${x.potential_score.toFixed(2)} · GHI ${x.avg_irradiance.toFixed(2)}`])}/>}</Module>
+ else if(view==='Distribution Logic')content=<Module title={view} eyebrow="40% residential · 40% industrial · 20% agricultural" busy={busy} error={error} action="Model allocation" onAction={()=>void module('/api/distribution/model',{total_captured_kwh:comparison?.tracked_output_kwh??0,demand_breakdown:{residential_pct:40,industrial_pct:40,agricultural_pct:20}},setDistribution)}>{distribution&&<><div className="allocation-list">{Object.entries(distribution.allocations).map(([key,value])=><Bar key={key} label={key.replace('_kwh','')} value={value} width={Math.min(100,value)} glow/>)}</div><List title="Shortfalls" items={distribution.shortfalls.map(x=>[x.sector,`${x.shortfall_kwh.toFixed(2)} kWh`])}/></>}</Module>
+ else content=<Module title={view} eyebrow="Explainable rule set" busy={busy} error={error} action="Generate recommendations" onAction={()=>void module('/api/recommendations/generate',{usage,absorption,distribution},setRecommendations)}>{recommendations&&<div className="recommendations">{recommendations.recommendations.map((x,i)=><article className={`recommendation ${x.priority}`} key={i}><span>{x.priority}</span><h3>{x.action}</h3><p>{x.reason}</p></article>)}</div>}</Module>
+ return <main className="dashboard-shell"><aside className="sidebar"><div className="sidebar-mark"><Logo size={38}/></div><nav aria-label="Dashboard sections">{nav.map((item,i)=><button className={`nav-item ${view===item?'active':''}`} key={item} onClick={()=>setView(item)}><span>{i<4?'◈':'○'}</span><span>{item}</span></button>)}</nav></aside><section className="dashboard-workspace"><header className="topbar"><div><span className="eyebrow">Kardashev Scaler</span><h1>{view}</h1></div><div className="location-fields"><Field label="Lat" value={lat} set={setLat}/><Field label="Lng" value={lng} set={setLng}/></div></header><section className="view-transition" key={view}>{content}</section></section></main>
 }
 
-type SunPosition = {
-  solar_azimuth: number
-  solar_elevation: number
-  optimal_panel_tilt_angle: number
-}
-
-type KardashevProgress = {
-  earth_kardashev_value: number
-  session_efficiency_gain_pct: number
-  projected_k_shift: number
-  projection: { label: string; projected_kardashev_value: number }
-}
-type UsageResult = { captured_kwh: number; consumed_kwh: number; waste_kwh: number; deficit_kwh: number; waste_pct: number; flagged_windows: { window: string; waste_kwh: number }[] }
-type AbsorptionResult = { zones: { lat: number; lng: number; avg_irradiance: number; panel_density_assumed: number; potential_score: number }[]; top_recommendation: { lat: number; lng: number; potential_score: number } | null }
-type DistributionResult = { allocations: { residential_kwh: number; industrial_kwh: number; agricultural_kwh: number }; shortfalls: { sector: string; shortfall_kwh: number }[] }
-type RecommendationResult = { recommendations: { priority: 'high' | 'medium' | 'low'; action: string; reason: string }[] }
-
-const navItems = ['Overview', 'Tracker Control', 'Kardashev Progress', 'Usage Intelligence', 'Absorption Optimization', 'Distribution Logic', 'Recommendation Engine']
-
-function isoDate(offsetDays = 0) {
-  const day = new Date()
-  day.setDate(day.getDate() + offsetDays)
-  return day.toISOString().slice(0, 10)
-}
-
-async function request<T>(path: string, body: object): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  })
-  const payload = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(payload.detail ?? 'The request could not be completed.')
-  return payload as T
-}
-
-export function Dashboard() {
-  const [view, setView] = useState('Overview')
-  const [latitude, setLatitude] = useState('28.6139')
-  const [longitude, setLongitude] = useState('77.2090')
-  const [startDate, setStartDate] = useState(isoDate(-7))
-  const [endDate, setEndDate] = useState(isoDate(-1))
-  const [area, setArea] = useState('2')
-  const [efficiency, setEfficiency] = useState('22')
-  const [comparison, setComparison] = useState<Comparison | null>(null)
-  const [progress, setProgress] = useState<KardashevProgress | null>(null)
-  const [sun, setSun] = useState<SunPosition | null>(null)
-  const [comparisonError, setComparisonError] = useState('')
-  const [progressError, setProgressError] = useState('')
-  const [sunError, setSunError] = useState('')
-  const [isComparing, setIsComparing] = useState(false)
-  const [isLoadingProgress, setIsLoadingProgress] = useState(false)
-  const [isLoadingSun, setIsLoadingSun] = useState(false)
-  const [consumed, setConsumed] = useState('4')
-  const [usage, setUsage] = useState<UsageResult | null>(null)
-  const [absorption, setAbsorption] = useState<AbsorptionResult | null>(null)
-  const [distribution, setDistribution] = useState<DistributionResult | null>(null)
-  const [recommendations, setRecommendations] = useState<RecommendationResult | null>(null)
-  const [moduleError, setModuleError] = useState('')
-  const [isModuleLoading, setIsModuleLoading] = useState(false)
-
-  const getSunPosition = async () => {
-    setIsLoadingSun(true); setSunError('')
-    try {
-      setSun(await request<SunPosition>('/api/tracker/sun-position', {
-        latitude: Number(latitude), longitude: Number(longitude), timestamp: new Date().toISOString(),
-      }))
-    } catch (error) { setSunError(error instanceof Error ? error.message : 'Sun position is unavailable.') }
-    finally { setIsLoadingSun(false) }
-  }
-
-  useEffect(() => {
-    void getSunPosition()
-    const timer = window.setInterval(() => void getSunPosition(), 60_000)
-    return () => window.clearInterval(timer)
-  // Refresh intentionally follows the current location fields every minute.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latitude, longitude])
-
-  const runComparison = async (event?: FormEvent) => {
-    event?.preventDefault(); setIsComparing(true); setComparisonError(''); setProgress(null); setProgressError('')
-    try {
-      const result = await request<Comparison>('/api/tracker/compare', {
-        latitude: Number(latitude), longitude: Number(longitude), start_date: startDate, end_date: endDate,
-        panel_specs: { area_m2: Number(area), efficiency_pct: Number(efficiency) },
-      })
-      setComparison(result)
-      if (result.session_id) await getProgress(result.session_id)
-      else setProgressError('Comparison complete. Configure Supabase to persist a session and unlock the global projection.')
-    } catch (error) { setComparisonError(error instanceof Error ? error.message : 'Comparison is unavailable.') }
-    finally { setIsComparing(false) }
-  }
-
-  const getProgress = async (sessionId: string) => {
-    setIsLoadingProgress(true); setProgressError('')
-    try { setProgress(await request<KardashevProgress>('/api/tracker/kardashev-score', { session_id: sessionId })) }
-    catch (error) { setProgressError(error instanceof Error ? error.message : 'Global projection is unavailable.') }
-    finally { setIsLoadingProgress(false) }
-  }
-
-  const runModule = async <T,>(path: string, payload: object, setResult: (result: T) => void) => {
-    setIsModuleLoading(true); setModuleError('')
-    try { setResult(await request<T>(path, payload)) }
-    catch (error) { setModuleError(error instanceof Error ? error.message : 'This module is unavailable.') }
-    finally { setIsModuleLoading(false) }
-  }
-  const runUsage = () => void runModule<UsageResult>('/api/usage/analyze', { captured_kwh: comparison?.tracked_output_kwh ?? 0, consumed_kwh: Number(consumed) }, setUsage)
-  const runAbsorption = () => void runModule<AbsorptionResult>('/api/absorption/zones', { center_lat: Number(latitude), center_lng: Number(longitude), radius_km: 10, grid_size: 3 }, setAbsorption)
-  const runDistribution = () => void runModule<DistributionResult>('/api/distribution/model', { total_captured_kwh: comparison?.tracked_output_kwh ?? 0, demand_breakdown: { residential_pct: 40, industrial_pct: 40, agricultural_pct: 20 } }, setDistribution)
-  const runRecommendations = () => void runModule<RecommendationResult>('/api/recommendations/generate', { usage, absorption, distribution }, setRecommendations)
-
-  const maxOutput = comparison ? Math.max(comparison.fixed_output_kwh, comparison.tracked_output_kwh, 0.0001) : 1
-  const earthFill = progress ? progress.earth_kardashev_value * 100 : 73
-
-  return (
-    <main className="dashboard-shell" aria-label="Kardashev Scaler dashboard">
-      <aside className="sidebar">
-        <div className="sidebar-mark"><Logo size={38} /></div>
-        <nav aria-label="Dashboard sections">
-          {navItems.map((item, index) => (
-            <button className={`nav-item ${view === item ? 'active' : ''}`} key={item} onClick={() => setView(item)}>
-              <span aria-hidden="true">{index < 3 ? '◈' : '○'}</span><span>{item}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
-      <section className="dashboard-workspace">
-        <header className="topbar">
-          <div><span className="eyebrow">Kardashev Scaler</span><h1>{view}</h1></div>
-          <div className="location-fields" aria-label="Tracker location">
-            <label>Lat<input value={latitude} inputMode="decimal" onChange={(event) => setLatitude(event.target.value)} /></label>
-            <label>Lng<input value={longitude} inputMode="decimal" onChange={(event) => setLongitude(event.target.value)} /></label>
-          </div>
-        </header>
-        <section className="view-transition" key={view}>{view === 'Usage Intelligence' ? <ModulePanel title="Usage Intelligence" eyebrow="Captured versus consumed" loading={isModuleLoading} error={moduleError} action="Analyze usage" onAction={runUsage}>
-          <label>Consumed kWh<input type="number" min="0" step=".1" value={consumed} onChange={(event) => setConsumed(event.target.value)} /></label>
-          {usage && <><div className="module-stat-grid"><Stat label="Captured" value={`${usage.captured_kwh.toFixed(2)} kWh`} /><Stat label="Consumed" value={`${usage.consumed_kwh.toFixed(2)} kWh`} /><Stat label="Waste" value={`${usage.waste_kwh.toFixed(2)} kWh`} /><Stat label="Deficit" value={`${usage.deficit_kwh.toFixed(2)} kWh`} /></div><p className="estimate-label">Waste: {usage.waste_pct.toFixed(2)}%</p><WindowList windows={usage.flagged_windows} /></>}</ModulePanel>
-        : view === 'Absorption Optimization' ? <ModulePanel title="Absorption Optimization" eyebrow="NASA POWER potential grid" loading={isModuleLoading} error={moduleError} action="Rank zones" onAction={runAbsorption}>
-          {absorption && <ZoneTable zones={absorption.zones} />}</ModulePanel>
-        : view === 'Distribution Logic' ? <ModulePanel title="Distribution Logic" eyebrow="40% residential · 40% industrial · 20% agricultural" loading={isModuleLoading} error={moduleError} action="Model allocation" onAction={runDistribution}>
-          {distribution && <><div className="allocation-list">{Object.entries(distribution.allocations).map(([sector, value]) => <OutputBar key={sector} label={sector.replace('_kwh', '')} value={value} width={Math.min(100, value)} glow />)}</div><Shortfalls items={distribution.shortfalls} /></>}</ModulePanel>
-        : view === 'Recommendation Engine' ? <ModulePanel title="Recommendation Engine" eyebrow="Explainable rule set" loading={isModuleLoading} error={moduleError} action="Generate recommendations" onAction={runRecommendations}>
-          {recommendations && <RecommendationList items={recommendations.recommendations} />}</ModulePanel>
-        : (
-          <div className="dashboard-grid">
-            <section className="panel comparison-panel">
-              <div className="panel-heading"><span className="eyebrow">Tracker Control</span><h2>Panel comparison</h2></div>
-              <form className="comparison-form" onSubmit={runComparison}>
-                <label>Start<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-                <label>End<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
-                <label>Area m²<input min="0.1" step="0.1" type="number" value={area} onChange={(event) => setArea(event.target.value)} /></label>
-                <label>Efficiency %<input min="1" max="100" step="0.1" type="number" value={efficiency} onChange={(event) => setEfficiency(event.target.value)} /></label>
-                <button className="outline-button" disabled={isComparing}>{isComparing ? 'Calculating' : 'Run comparison'}</button>
-              </form>
-              {isComparing && <div className="skeleton comparison-skeleton" />}
-              {comparisonError && <Failure message={comparisonError} retry={() => void runComparison()} />}
-              {comparison && !isComparing && <>
-                {comparison.data_source === 'cached_demo_sample' && <p className="cached-label">Showing cached sample data — NASA POWER was unavailable.</p>}
-                <div className="gain-stat"><span>Efficiency gain</span><strong>+{comparison.efficiency_gain_pct.toFixed(2)}%</strong></div>
-                <div className="bar-comparison">
-                  <OutputBar label="Fixed tilt" value={comparison.fixed_output_kwh} width={(comparison.fixed_output_kwh / maxOutput) * 100} />
-                  <OutputBar label="Sun tracking" value={comparison.tracked_output_kwh} width={(comparison.tracked_output_kwh / maxOutput) * 100} glow />
-                </div>
-              </>}
-            </section>
-            <section className="panel progress-panel">
-              <div className="panel-heading"><span className="eyebrow">Kardashev Progress</span><h2>Earth-scale measure</h2></div>
-              {isLoadingProgress && <div className="skeleton logo-skeleton" />}
-              {!isLoadingProgress && <div className="progress-content">
-                <Logo fillPercent={earthFill} size={170} />
-                <div><span className="eyebrow">Earth Kardashev value</span><strong className="k-value">{progress ? progress.earth_kardashev_value.toFixed(6) : '—'}</strong></div>
-              </div>}
-              {progress && <div className="support-stats"><span>Session gain <b>+{progress.session_efficiency_gain_pct.toFixed(2)}%</b></span><span>Projected K shift <b>+{progress.projected_k_shift.toFixed(6)}</b></span></div>}
-              {progress && <p className="estimate-label">{progress.projection.label}</p>}
-              {progressError && <Failure message={progressError} retry={comparison?.session_id ? () => getProgress(comparison.session_id!) : undefined} />}
-            </section>
-            <section className="panel sun-panel">
-              <div className="panel-heading"><span className="eyebrow">Live tracker</span><h2>Sun position</h2><span className="refresh-note">60s refresh</span></div>
-              {isLoadingSun && !sun && <div className="skeleton sun-skeleton" />}
-              {sun && <div className="sun-stats"><Stat label="Azimuth" value={`${sun.solar_azimuth.toFixed(1)}°`} /><Stat label="Elevation" value={`${sun.solar_elevation.toFixed(1)}°`} /><Stat label="Optimal tilt" value={`${sun.optimal_panel_tilt_angle.toFixed(1)}°`} /></div>}
-              {sunError && <Failure message={sunError} retry={getSunPosition} />}
-            </section>
-          </div>
-        )}</section>
-      </section>
-    </main>
-  )
-}
-
-function OutputBar({ label, value, width, glow = false }: { label: string; value: number; width: number; glow?: boolean }) {
-  return <div className="output-row"><div><span>{label}</span><b>{value.toFixed(3)} kWh</b></div><div className="output-track"><i className={glow ? 'glow-bar' : ''} style={{ width: `${width}%` }} /></div></div>
-}
-
-function Stat({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div> }
-
-function Failure({ message, retry }: { message: string; retry?: () => void }) {
-  return <div className="failure"><p>{message}</p>{retry && <button className="text-button" onClick={() => void retry()}>Retry</button>}</div>
-}
-
-function ModulePanel({ title, eyebrow, loading, error, action, onAction, children }: { title: string; eyebrow: string; loading: boolean; error: string; action: string; onAction: () => void; children: ReactNode }) {
-  return <section className="module-page"><span className="eyebrow">{eyebrow}</span><h2>{title}</h2><div className="module-action"><button className="outline-button" disabled={loading} onClick={onAction}>{loading ? 'Processing' : action}</button></div>{loading && <div className="skeleton module-skeleton" />}{error && <Failure message={error} retry={onAction} />}{children}</section>
-}
-function WindowList({ windows }: { windows: UsageResult['flagged_windows'] }) { return <div className="data-list"><span className="eyebrow">Highest waste windows</span>{windows.length ? windows.map((item) => <p key={item.window}><b>{item.window}</b><span>{item.waste_kwh.toFixed(3)} kWh</span></p>) : <p>No surplus windows flagged.</p>}</div> }
-function ZoneTable({ zones }: { zones: AbsorptionResult['zones'] }) { return <div className="data-list zone-list">{zones.map((zone) => <p key={`${zone.lat}-${zone.lng}`}><b>{zone.lat}, {zone.lng}</b><span>Score {zone.potential_score.toFixed(2)} · GHI {zone.avg_irradiance.toFixed(2)}</span></p>)}</div> }
-function Shortfalls({ items }: { items: DistributionResult['shortfalls'] }) { return <div className="data-list"><span className="eyebrow">Shortfalls</span>{items.length ? items.map((item) => <p key={item.sector}><b>{item.sector}</b><span>{item.shortfall_kwh.toFixed(2)} kWh</span></p>) : <p>No baseline shortfalls.</p>}</div> }
-function RecommendationList({ items }: { items: RecommendationResult['recommendations'] }) { return <div className="recommendations">{items.map((item, index) => <article className={`recommendation ${item.priority}`} key={`${item.action}-${index}`}><span>{item.priority}</span><h3>{item.action}</h3><p>{item.reason}</p></article>)}</div> }
+function Overview(){const [active,setActive]=useState(0);useEffect(()=>{const update=()=>{const el=document.getElementById('kardashev-story');if(!el)return;const n=Math.max(0,Math.min(1,(scrollY-el.offsetTop)/(el.offsetHeight-innerHeight)));setActive(n<.33?0:n<.66?1:2)};update();addEventListener('scroll',update,{passive:true});return()=>removeEventListener('scroll',update)},[]);const types=[['Type I','Harness all of the energy on a planet'],['Type II','Harness all of the energy from a star'],['Type III','Harness all of the energy in a galaxy']];return <div className="overview-page"><section className="overview-intro"><span className="eyebrow">A measure of energy</span><h2>What is the Kardashev Scale</h2><p>The Kardashev Scale measures a civilization by the energy it can harness. Type I uses the energy of a planet; Type II draws on a star; Type III operates across a galaxy. Earth is still approaching Type I, at approximately 0.73.</p></section><section id="kardashev-story" className="story-container"><div className="story-sticky"><div className="story-media">{types.map((_,i)=><div id={`media-${i+1}`} className={`story-media-layer ${active===i?'active':''}`} key={i}/>)}</div><div className="story-copy"><span className="eyebrow">Kardashev Scaler</span><h2>We aspire to be a galactic civilization</h2><div className="story-rows">{types.map(([type,text],i)=><div className={`story-row ${active===i?'active':''}`} key={type}><b>{type}</b><span>— {text}</span></div>)}</div></div></div></section><section className="about-section"><span className="eyebrow">About Kardashev Scaler</span><h2>From sunlight to civilization-scale context</h2><h3>What it does</h3><p>Kardashev Scaler tracks real sun position, compares fixed and tracked solar panel output using NASA data, and maps results onto the real Kardashev Scale.</p><h3>Why it matters</h3><p>Tracking and optimising solar capture turns a practical local gain into a clearer view of global energy progress.</p><h3>How to use it</h3><ol><li>Enter a location in the global top bar.</li><li>Run a panel comparison in Tracker Control.</li><li>View Kardashev Progress.</li><li>Explore Usage, Absorption, Distribution, and Recommendation modules.</li></ol></section></div>}
+function Field({label,value,set,type='text'}:{label:string;value:string;set:(value:string)=>void;type?:string}){return <label>{label}<input type={type} value={value} onChange={e=>set(e.target.value)}/></label>}
+function Module({title,eyebrow,busy,error,action,onAction,children}:{title:string;eyebrow:string;busy:boolean;error:string;action:string;onAction:()=>void;children:ReactNode}){return <section className="module-page"><span className="eyebrow">{eyebrow}</span><h2>{title}</h2><div className="module-action"><button className="outline-button" disabled={busy} onClick={onAction}>{busy?'Processing':action}</button></div>{busy&&<div className="skeleton module-skeleton"/>}{error&&<Failure message={error} retry={onAction}/>} {children}</section>}
+function Bar({label,value,width,glow=false}:{label:string;value:number;width:number;glow?:boolean}){return <div className="output-row"><div><span>{label}</span><b>{value.toFixed(3)} kWh</b></div><div className="output-track"><i className={glow?'glow-bar':''} style={{width:`${width}%`}}/></div></div>};function Stat({label,value}:{label:string;value:string}){return <div><span>{label}</span><strong>{value}</strong></div>};function Failure({message,retry}:{message:string;retry?:()=>void}){return <div className="failure"><p>{message}</p>{retry&&<button className="text-button" onClick={retry}>Retry</button>}</div>};function List({title,items}:{title:string;items:string[][]}){return <div className="data-list"><span className="eyebrow">{title}</span>{items.length?items.map(([a,b])=><p key={a}><b>{a}</b><span>{b}</span></p>):<p>No items flagged.</p>}</div>}
