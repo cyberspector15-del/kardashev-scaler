@@ -7,14 +7,14 @@
 Accepts a persisted `session_id`, or raw `captured_kwh`, `consumed_kwh`, and optional hourly `consumption_profile`.
 
 ```json
-{"captured_kwh":12,"consumed_kwh":8,"consumption_profile":[{"hour":"12:00","demand_kwh":0.1}]}
+{"captured_kwh":1.5,"consumed_kwh":1,"consumption_profile":[{"hour":0,"demand_kwh":0.5},{"hour":1,"demand_kwh":0.5}]}
 ```
 
 ```json
-{"captured_kwh":12,"consumed_kwh":8,"waste_kwh":4,"deficit_kwh":0,"waste_pct":33.33,"flagged_windows":[{"window":"12:00","waste_kwh":11.9}]}
+{"captured_kwh":1.5,"consumed_kwh":1,"waste_kwh":0.5,"deficit_kwh":0,"waste_pct":33.33,"flagged_windows":[{"window":"0","waste_kwh":0.25},{"window":"1","waste_kwh":0.25}],"deficit_windows":[]}
 ```
 
-Waste is captured energy beyond consumption; deficit is unmet consumption. With no profile, the service uses an even 24-hour demand distribution solely as a transparent demo fallback.
+Waste is captured energy beyond consumption; deficit is unmet consumption. When a profile is supplied, its `demand_kwh` values must sum to `consumed_kwh`. Tracker output currently supplies only a total, so the service distributes that captured total evenly over the same profile windows and derives **both** aggregate totals from that shared window ledger. Consequently, all `flagged_windows.waste_kwh` values sum exactly to `waste_kwh`; `sum(window waste) - sum(window deficit)` reconciles to `waste_kwh - deficit_kwh`. With no profile, the service uses an even 24-hour demand distribution solely as a transparent demo fallback.
 
 ### `POST /api/absorption/zones`
 
