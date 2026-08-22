@@ -45,7 +45,7 @@ export function Logo({ size = 240, className, title = 'Kardashev Scaler', fillPe
       </g>
 
       {fillHeight > 0 && (
-        <rect fill="#ffffff" height={fillHeight} rx={Math.min(22, fillHeight / 2)} width="44" x="29.5" y={fillY} />
+        <rect className="logo-fill" fill="#ffffff" height={fillHeight} rx={Math.min(22, fillHeight / 2)} width="44" x="29.5" y={fillY} />
       )}
     </svg>
   )

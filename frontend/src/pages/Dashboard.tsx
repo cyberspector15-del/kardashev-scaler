@@ -8,6 +8,7 @@ type Comparison = {
   tracked_output_kwh: number
   efficiency_gain_pct: number
   session_id: string | null
+  data_source?: string
 }
 
 type SunPosition = {
@@ -142,7 +143,7 @@ export function Dashboard() {
             <label>Lng<input value={longitude} inputMode="decimal" onChange={(event) => setLongitude(event.target.value)} /></label>
           </div>
         </header>
-        {view === 'Usage Intelligence' ? <ModulePanel title="Usage Intelligence" eyebrow="Captured versus consumed" loading={isModuleLoading} error={moduleError} action="Analyze usage" onAction={runUsage}>
+        <section className="view-transition" key={view}>{view === 'Usage Intelligence' ? <ModulePanel title="Usage Intelligence" eyebrow="Captured versus consumed" loading={isModuleLoading} error={moduleError} action="Analyze usage" onAction={runUsage}>
           <label>Consumed kWh<input type="number" min="0" step=".1" value={consumed} onChange={(event) => setConsumed(event.target.value)} /></label>
           {usage && <><div className="module-stat-grid"><Stat label="Captured" value={`${usage.captured_kwh.toFixed(2)} kWh`} /><Stat label="Consumed" value={`${usage.consumed_kwh.toFixed(2)} kWh`} /><Stat label="Waste" value={`${usage.waste_kwh.toFixed(2)} kWh`} /><Stat label="Deficit" value={`${usage.deficit_kwh.toFixed(2)} kWh`} /></div><p className="estimate-label">Waste: {usage.waste_pct.toFixed(2)}%</p><WindowList windows={usage.flagged_windows} /></>}</ModulePanel>
         : view === 'Absorption Optimization' ? <ModulePanel title="Absorption Optimization" eyebrow="NASA POWER potential grid" loading={isModuleLoading} error={moduleError} action="Rank zones" onAction={runAbsorption}>
@@ -165,6 +166,7 @@ export function Dashboard() {
               {isComparing && <div className="skeleton comparison-skeleton" />}
               {comparisonError && <Failure message={comparisonError} retry={() => void runComparison()} />}
               {comparison && !isComparing && <>
+                {comparison.data_source === 'cached_demo_sample' && <p className="cached-label">Showing cached sample data — NASA POWER was unavailable.</p>}
                 <div className="gain-stat"><span>Efficiency gain</span><strong>+{comparison.efficiency_gain_pct.toFixed(2)}%</strong></div>
                 <div className="bar-comparison">
                   <OutputBar label="Fixed tilt" value={comparison.fixed_output_kwh} width={(comparison.fixed_output_kwh / maxOutput) * 100} />
@@ -190,7 +192,7 @@ export function Dashboard() {
               {sunError && <Failure message={sunError} retry={getSunPosition} />}
             </section>
           </div>
-        )}
+        )}</section>
       </section>
     </main>
   )

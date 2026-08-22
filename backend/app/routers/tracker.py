@@ -11,6 +11,7 @@ from app.services.solar_calc import (
     calculate_comparison,
     earth_kardashev_projection,
     fetch_nasa_irradiance,
+    fetch_nasa_irradiance_with_source,
     solar_position,
 )
 from app.services.supabase_client import get_supabase, insert_row
@@ -61,7 +62,7 @@ async def get_sun_position(body: SunPositionRequest) -> dict[str, float]:
 @router.post("/nasa-irradiance")
 async def get_nasa_irradiance(body: IrradianceRequest) -> dict[str, object]:
     try:
-        readings = fetch_nasa_irradiance(body.latitude, body.longitude, body.start_date, body.end_date)
+        readings, data_source = fetch_nasa_irradiance_with_source(body.latitude, body.longitude, body.start_date, body.end_date)
     except ValueError as exc:
         raise _bad_request(exc) from exc
     except NasaPowerError as exc:
@@ -78,13 +79,13 @@ async def get_nasa_irradiance(body: IrradianceRequest) -> dict[str, object]:
             "azimuth_angle": 180 if body.latitude >= 0 else 0,
             "mode": "fixed",
         })
-    return {"location": {"latitude": body.latitude, "longitude": body.longitude}, "readings": readings}
+    return {"location": {"latitude": body.latitude, "longitude": body.longitude}, "readings": readings, "data_source": data_source}
 
 
 @router.post("/compare")
 async def compare_tracker_output(body: CompareRequest) -> dict[str, object]:
     try:
-        readings = fetch_nasa_irradiance(body.latitude, body.longitude, body.start_date, body.end_date)
+        readings, data_source = fetch_nasa_irradiance_with_source(body.latitude, body.longitude, body.start_date, body.end_date)
         comparison = calculate_comparison(
             body.latitude, body.longitude, readings, body.panel_specs.area_m2, body.panel_specs.efficiency_pct
         )
@@ -102,7 +103,7 @@ async def compare_tracker_output(body: CompareRequest) -> dict[str, object]:
         "total_energy_tracked_kwh": comparison["tracked_output_kwh"],
         "efficiency_gain_pct": comparison["efficiency_gain_pct"],
     })
-    return {**comparison, "session_id": session["id"] if session else None}
+    return {**comparison, "session_id": session["id"] if session else None, "data_source": data_source}
 
 
 @router.post("/kardashev-score")
