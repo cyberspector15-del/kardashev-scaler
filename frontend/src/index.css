@@ -45,13 +45,13 @@ button:disabled { cursor: wait; opacity: .55; }
 @keyframes logo-breathe { 0%, 100% { opacity: .84; transform: scale(.985); } 50% { opacity: 1; transform: scale(1); } }
 
 .dashboard-shell { background: #000; color: #f5f5f5; display: flex; min-height: 100vh; }
-.sidebar { border-right: 1px solid #f5f5f5; display: flex; flex: 0 0 188px; flex-direction: column; min-height: 100vh; }
+.sidebar { border-right: 1px solid #f5f5f5; display: flex; flex: 0 0 188px; flex-direction: column; height: 100vh; position: sticky; top: 0; z-index: 100; }
 .sidebar-mark { border-bottom: 1px solid #f5f5f5; display: grid; min-height: 74px; place-items: center; }
-.sidebar nav { display: flex; flex-direction: column; padding-top: 1rem; }
+.sidebar nav { display: flex; flex-direction: column; padding-top: 1rem; overflow-y: auto; }
 .nav-item { background: transparent; border: 0; border-left: 2px solid transparent; color: #f5f5f5; display: flex; font-size: .7rem; gap: .7rem; letter-spacing: .06em; padding: .85rem 1rem; text-align: left; }
 .nav-item:hover, .nav-item.active { border-left-color: #ffffff; box-shadow: inset 7px 0 12px -10px #ffffff; color: #ffffff; }
 .dashboard-workspace { flex: 1; min-width: 0; }
-.topbar { align-items: center; border-bottom: 1px solid #f5f5f5; display: flex; justify-content: space-between; min-height: 74px; padding: .8rem 1.4rem; }
+.topbar { align-items: center; background: #000; border-bottom: 1px solid #f5f5f5; display: flex; justify-content: space-between; min-height: 74px; padding: .8rem 1.4rem; position: sticky; top: 0; z-index: 90; }
 .eyebrow { color: #f5f5f5; display: block; font-size: .62rem; letter-spacing: .16em; opacity: .65; text-transform: uppercase; }
 .topbar h1 { font-size: 1rem; margin-top: .25rem; }
 .location-fields, .comparison-form { display: flex; gap: .65rem; }
@@ -78,6 +78,48 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 1px solid 
 .cached-label { border-left: 1px solid #ffffff; font-size: .67rem; letter-spacing: .04em; margin: 0 0 .75rem; padding-left: .6rem; }
 @keyframes view-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .standalone-page { min-height: calc(100vh - 74px); padding: 2rem; }.standalone-page > h2 { font-size: 1.5rem; margin-top: .5rem; }.standalone-page .comparison-form { max-width: 760px; }.standalone-page .bar-comparison { max-width: 760px; }
-.overview-page { overflow: clip; }.overview-intro, .about-section { margin: 0 auto; max-width: 840px; padding: 9rem 2rem; }.overview-intro h2, .about-section h2 { font-size: clamp(1.6rem, 3vw, 3rem); line-height: 1.1; margin: .7rem 0 1.4rem; }.overview-intro p, .about-section p, .about-section li { font-size: 1rem; line-height: 1.75; max-width: 720px; }.about-section h3 { font-family: 'Dune Rise', 'League Spartan', sans-serif; font-size: .78rem; letter-spacing: .12em; margin: 2rem 0 .4rem; text-transform: uppercase; }.about-section ol { padding-left: 1.2rem; }
-.story-container { height: 300vh; position: relative; }.story-sticky { height: 100vh; overflow: hidden; position: sticky; top: 0; }.story-media, .story-media-layer { inset: 0; position: absolute; }.story-media { background: #000000; }.story-media-layer { background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.16), rgba(255,255,255,.025) 30%, #000000 72%); opacity: 0; transition: opacity .7s ease; }.story-media-layer:nth-child(2) { background: radial-gradient(circle at 65% 45%, rgba(255,255,255,.18), rgba(255,255,255,.02) 35%, #000000 74%); }.story-media-layer:nth-child(3) { background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.11), rgba(255,255,255,.015) 45%, #000000 76%); }.story-media-layer.active { opacity: 1; }.story-copy { display: grid; height: 100%; max-width: 1080px; padding: 12vh 8vw; position: relative; z-index: 1; }.story-copy h2 { font-size: clamp(2.1rem, 5vw, 5.6rem); line-height: .96; margin: .7rem 0 auto; max-width: 800px; }.story-rows { border-top: 1px solid #f5f5f5; max-width: 850px; }.story-row { border-bottom: 1px solid #f5f5f5; display: flex; font-size: clamp(.75rem, 1.3vw, 1.1rem); gap: .5rem; letter-spacing: .05em; opacity: .3; padding: 1rem 0; transition: opacity .35s ease, text-shadow .35s ease; }.story-row.active { opacity: 1; text-shadow: 0 0 9px #ffffff; }.story-row b { font-family: 'Dune Rise', 'League Spartan', sans-serif; min-width: 90px; }
+.overview-page { overflow: clip; }
+/* ── intro section ─────────────────────────────────────────────── */
+.overview-intro { margin: 0 auto; max-width: 780px; padding: 8rem 2rem 7rem; }
+.overview-intro h2 { font-size: clamp(1.6rem, 3vw, 3rem); line-height: 1.1; margin: .7rem 0 1.6rem; }
+.overview-intro p { font-size: 1rem; line-height: 1.8; max-width: 680px; opacity: .85; }
+.overview-sub { margin-top: 1.4rem !important; opacity: 1 !important; }
+.overview-sub strong { color: #ffffff; }
+/* ── about section ─────────────────────────────────────────────── */
+.about-section { border-top: 1px solid rgba(245,245,245,.18); margin: 0 auto; max-width: 1120px; padding: 7rem 2rem 9rem; }
+.about-section > .eyebrow { display: block; margin-bottom: .6rem; }
+.about-section h2 { font-size: clamp(1.6rem, 3vw, 3rem); line-height: 1.1; margin: .4rem 0 3.5rem; }
+/* 3-column grid — collapses to 1-col at ≤900px */
+.about-grid { display: grid; gap: 0; grid-template-columns: repeat(3, 1fr); }
+.about-block { border-left: 1px solid rgba(245,245,245,.18); padding: 0 2rem 0 1.8rem; }
+.about-block:first-child { border-left: 0; padding-left: 0; }
+.about-block h3 { font-family: 'Dune Rise', 'League Spartan', sans-serif; font-size: .72rem; letter-spacing: .14em; margin: 0 0 1.1rem; text-transform: uppercase; }
+.about-block p, .about-block li { font-size: .9rem; line-height: 1.75; opacity: .8; }
+.about-steps { list-style: none; margin: 0; padding: 0; }
+.about-steps li { border-bottom: 1px solid rgba(245,245,245,.12); padding: .75rem 0; font-size: .85rem; line-height: 1.6; opacity: .85; }
+.about-steps li:first-child { border-top: 1px solid rgba(245,245,245,.12); }
+.about-steps strong { color: #ffffff; font-weight: 600; opacity: 1; }
+@media (max-width: 900px) { .about-grid { grid-template-columns: 1fr; gap: 3rem; } .about-block { border-left: 0; border-top: 1px solid rgba(245,245,245,.18); padding: 2.5rem 0 0; } .about-block:first-child { border-top: 0; padding-top: 0; } }
+.story-container { height: 300vh; position: relative; }
+/* sticky viewport — full-height, overflow clipped so scaled videos don't bleed outside */
+.story-sticky { height: 100vh; overflow: hidden; position: sticky; top: 0; }
+/* media backdrop — full-bleed, no border, no background, no box of any kind */
+.story-media { background: transparent; inset: 0; position: absolute; }
+.story-media-layer {
+  filter: grayscale(100%) contrast(1.1) brightness(0.9);
+  /* mask applied directly to the video: center visible, edges fully transparent ~30% in
+     so the video dissolves into the black page with zero perceptible rectangle or hard edge.
+     Adjust the second stop (30%) to widen/narrow the visible center area. */
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 0%, black 30%, transparent 70%);
+  mask-image:         radial-gradient(ellipse at 50% 50%, black 0%, black 30%, transparent 70%);
+  height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%;
+  /* zoom-into-void: inactive = zoomed forward + invisible, active = natural scale + visible */
+  opacity: 0; transform: scale(1.15);
+  transition: opacity 1.3s ease, transform 1.3s ease; }
+.story-media-layer.active { opacity: 1; transform: scale(1); }
+/* copy overlay — sits above the video plane */
+.story-copy { align-content: center; display: grid; height: 100%; max-width: 1080px; padding: 12vh 8vw; position: relative; z-index: 1; }
+/* Headline font capped at 4.5rem max so it scales gracefully across 1366-1920px viewports without overcrowding the Type I/II/III rows. */
+.story-copy .eyebrow { font-size: clamp(.5rem, .8vw, .55rem); }
+.story-copy h2 { font-family: 'DM Sans', sans-serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: .96; margin: .7rem 0 4rem; max-width: 800px; }.story-rows { border-top: 1px solid #f5f5f5; max-width: 850px; }.story-row { border-bottom: 1px solid #f5f5f5; display: flex; font-size: clamp(.65rem, 1vw, .9rem); gap: .5rem; letter-spacing: .05em; opacity: .3; padding: 1rem 0; transition: opacity .35s ease, text-shadow .35s ease; }.story-row.active { opacity: 1; text-shadow: 0 0 9px #ffffff; }.story-row b { font-family: 'Dune Rise', 'League Spartan', sans-serif; min-width: 90px; }
 @media (max-width: 760px) { .sidebar { flex-basis: 58px; }.sidebar-mark { min-height: 58px; }.sidebar .nav-item { justify-content: center; padding: .82rem 0; }.sidebar .nav-item span:last-child { display: none; }.topbar { align-items: flex-start; flex-direction: column; gap: .8rem; }.dashboard-grid { grid-template-columns: 1fr; }.sun-panel { grid-column: auto; }.panel { min-height: auto; }.location-fields { width: 100%; }.location-fields label { flex: 1; }.location-fields input { width: auto; }.sun-stats { grid-template-columns: 1fr; gap: .8rem; }.sun-stats > div { border-left: 0; border-top: 1px solid #f5f5f5; padding: .8rem 0 0; }.sun-stats > div:first-child { border-top: 0; padding-top: 0; } }
