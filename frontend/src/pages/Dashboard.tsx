@@ -1,7 +1,7 @@
 import { FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { Logo } from '../components/Logo'
+import { post } from '../lib/api'
 
-const api = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 type Comparison = { fixed_output_kwh:number; tracked_output_kwh:number; efficiency_gain_pct:number; session_id:string|null; data_source?:string }
 type Sun = { solar_azimuth:number; solar_elevation:number; optimal_panel_tilt_angle:number }
 type Progress = { earth_kardashev_value:number; session_efficiency_gain_pct:number; projected_k_shift:number; projection:{label:string} }
@@ -9,7 +9,6 @@ type Usage = {captured_kwh:number;consumed_kwh:number;waste_kwh:number;deficit_k
 type Absorption={zones:{lat:number;lng:number;avg_irradiance:number;potential_score:number}[]}; type Distribution={allocations:Record<string,number>;shortfalls:{sector:string;shortfall_kwh:number}[]}; type Recommendations={recommendations:{priority:'high'|'medium'|'low';action:string;reason:string}[]}
 const nav=['Overview','Tracker Control','Kardashev Progress','Sun Position','Usage Intelligence','Absorption Optimization','Distribution Logic','Recommendation Engine']
 const today=(offset:number)=>{const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
-async function post<T>(path:string,body:object){const response=await fetch(`${api}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail??'The request could not be completed.');return data as T}
 
 export function Dashboard(){
  const [view,setView]=useState('Overview'),[lat,setLat]=useState('28.6139'),[lng,setLng]=useState('77.2090'),[start,setStart]=useState(today(-7)),[end,setEnd]=useState(today(-1)),[area,setArea]=useState('2'),[eff,setEff]=useState('22')
